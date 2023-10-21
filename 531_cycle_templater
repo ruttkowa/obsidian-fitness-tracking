@@ -1,0 +1,187 @@
+<%* 
+// Gets the main lift pages with Dataview
+// Make sure there are files present which fit the strings you enter in this array
+const exercises = ["bench press", "deadlift", "overhead press", "backsquat"]
+
+const exercise_hashes = []
+
+for (let i=0; i < exercises.length; i++){
+			// Exercise Array for each entry
+			// Basically querys the page name, gets the benchmark metadata, sorts it to get the most current one and splits it.
+			var e = DataviewAPI.page(exercises[i]).benchmark.toSorted().last().split("/", 4);
+			let h = {};
+			h['name'] = exercises[i];
+			h['date'] = e[0];
+			h['rm'] = e[1];
+			h['weight'] = e[2];
+			h['note'] = e[3];
+			exercise_hashes.push(h);
+			}
+
+
+console.log("Finished querying the exercises")
+
+// Calculate Training RMs for the current cycle
+var cycle_rms = [];
+
+for (let i=0; i < exercise_hashes.length; i++){
+	var temp_h = {}
+	let weight = parseInt(exercise_hashes[i]['weight']);
+	let reps = parseInt(exercise_hashes[i]['rm'].substring(0,1));
+	// Formula from 5/3/1 training template
+	temp_h['trainingRM'] = Math.round((weight * reps * 0.0333 + weight) * 0.9);
+	temp_h['name'] = exercise_hashes[i]['name'];
+	cycle_rms.push(temp_h);
+}
+console.log("Calculated cycle_rms")
+// Percentages and reps
+let PaR = {}
+PaR['week1'] = [{"percentages": [65, 75, 85]}, {"reps": [5, 5, 5]}];
+PaR['week2'] = [{"percentages": [70, 80, 90]}, {"reps": [3, 3, 3]}];
+PaR['week3'] = [{"percentages": [75, 85, 95]}, {"reps": [5, 3, 1]}];
+PaR['week4'] = [{"percentages": [40, 50, 60]}, {"reps": [5, 5, 5]}];
+// Warm Up Sets
+let warmup_percentages = [40, 50, 60]
+let warmup_reps = [5, 5, 5]
+
+
+// Build the actual work sets
+let work = []
+// The hash should look like this
+// {
+//    "previous_id": 0,
+//    "id": 1,
+//    "exercise": "backsquat",
+//    "warmup_set_1": 5
+//    "warmup_set_2": 5
+//    "warmup_set_3": 5
+//    "warmup_set_1_weights": 5
+//    "warmup_set_1_percentage": 5
+//    "warmup_set_2_weights": 5
+//    "warmup_set_2_percentage": 5
+//    "warmup_set_3_weights": 5
+//    "warmup_set_3_percentage": 5
+//    "set_1_reps": 5
+//    "set_2_reps": 5
+//    "set_3_reps": 5
+//    "set_1_weight": 5
+//    "set_2_weight": 5
+//    "set_3_weight": 5
+// }
+
+
+// Based on the ID, exercise, percentage and reps this function generates a hash which represents a single unit of work 
+// Like a work set of backsquats including warm up and reps and sets according to the 5/3/1 scheme
+function generateTrainingDayHash(id, exercise, p, r) {
+	console.log("Starting function generateTrainingDayHash with the following params");
+	console.log(exercise);
+	console.log(p);
+	console.log(r);
+	// Percentages and reps are an array, so I need to extract the array first
+	reps = r['reps']
+	percentage = p['percentages']
+	var hash = {};
+	hash['id'] = id;
+	hash['exercise'] = exercise['name']
+	console.log("Generating Warm Up Sets");
+	// Warm Up
+	for (let i=0; i < warmup_reps.length; i++){
+		var warmupXreps = "warmup_" + (i+1) + "_reps"
+		var warmupXweight = "warmup_" + (i+1) + "_weight"
+		var warmupXpercentage = "warmup_" + (i+1) + "_percentage"
+		hash[warmupXreps] = warmup_reps[i];
+		hash[warmupXpercentage] = warmup_percentages[i];
+		hash[warmupXweight] = Math.round((exercise['trainingRM'] / 100) * warmup_percentages[i]); 
+	};
+	console.log("Generating the actual sets, reps.length is");
+	console.log(reps.length);
+	// Sets = rep.length
+	for (let i=0; i < reps.length; i++){
+		var setXreps = "set_" + (i+1) + "_reps"
+		var setXweight = "set_" + (i+1) + "_weight"
+		var setXpercentage = "set_" + (i+1) + "_percentage"
+		hash[setXreps] = reps[i];
+		hash[setXpercentage] = percentage[i];
+		hash[setXweight] = Math.round((exercise['trainingRM'] / 100) * percentage[i]); 
+	};
+	
+	
+return hash; 
+}
+
+
+// Over here starts the action. This loop builds the complete work sets as hashes and pushes them into the work array.
+id = 0;
+for (let i=0; i < 4; i++){
+	console.log("START");
+	var weekIteration = "week" + (i+1);
+	console.log(weekIteration);	
+	for (let j=0; j < cycle_rms.length; j++){
+		// Build for first, second, third and fourth exercise 
+		console.log("Building for..");
+		console.log(weekIteration);
+		console.log(PaR[weekIteration][1]);
+		console.log(PaR[weekIteration][0]);
+		console.log("FUNCTION STARTS BELOW");
+		work.push(generateTrainingDayHash(id, cycle_rms[j], PaR[weekIteration][0], PaR[weekIteration][1]));
+		id++;
+	};
+};
+
+// Appends the date
+//tR += h['date'];
+
+
+-%>
+---
+tags: "531-cycle"
+work:
+<%*  
+// built metadata
+for (let i=0; i < work.length; i++){
+-%>
+  - <% work[i]['id'] %>/<% work[i]['exercise'] %>/<% work[i]['warmup_1_reps'] %>x<% work[i]['warmup_1_weight'] %>(<% work[i]['warmup_1_percentage'] %>%)/<% work[i]['warmup_2_reps'] %>x<% work[i]['warmup_2_weight'] %>(<% work[i]['warmup_2_percentage'] %>%)/<% work[i]['warmup_3_reps'] %>x<% work[i]['warmup_3_weight'] %>(<% work[i]['warmup_3_percentage'] %>%)/<% work[i]['set_1_reps'] %>x<% work[i]['set_1_weight'] %>(<% work[i]['set_1_percentage']%>%)/<% work[i]['set_2_reps'] %>x<% work[i]['set_2_weight'] %>(<% work[i]['set_2_percentage']%>%)/<% work[i]['set_3_reps'] %>x<% work[i]['set_3_weight'] %>(<% work[i]['set_3_percentage']%>%)
+<%*  
+// end work for loop
+}
+-%>
+
+---
+# 5 / 3 / 1 auto-generated cycle
+## Overview
+<%*  
+// overview for loop
+for (let i=0; i < exercise_hashes.length; i++){
+-%>
+### Training rep max
+trainingRM<% cycle_rms[i]['name'].replace(/\s/g, "") %>:: <% cycle_rms[i]['trainingRM'] %> kg  (using <% exercise_hashes[i]['rm'] %> from <% exercise_hashes[i]['date'] %> as a starting point: <% exercise_hashes[i]['weight'] %>kg)
+<%*  
+// end overview for loop
+}
+-%>
+
+---
+# rx'd Work
+<%*  
+// work for loop
+for (let i=0; i < work.length; i++){
+-%>
+## Day <% work[i]['id'] + 1 %>
+### Exercise:: <% work[i]['exercise'] %>
+### Warm Up
+- [ ] <% work[i]['warmup_1_reps'] %> x <% work[i]['warmup_1_weight'] %>kg (<% work[i]['warmup_1_percentage'] %>%)
+- [ ] <% work[i]['warmup_2_reps'] %> x <% work[i]['warmup_2_weight'] %>kg (<% work[i]['warmup_2_percentage'] %>%)
+- [ ] <% work[i]['warmup_3_reps'] %> x <% work[i]['warmup_3_weight'] %>kg (<% work[i]['warmup_3_percentage'] %>%)
+### Set 1 
+- [ ] <% work[i]['set_1_reps'] %> x <% work[i]['set_1_weight'] %>kg (<% work[i]['set_1_percentage']%>%)
+### Set 2 
+- [ ] <% work[i]['set_2_reps'] %> x <% work[i]['set_2_weight'] %>kg (<% work[i]['set_2_percentage']%>%)
+### Set 3
+- [ ] <% work[i]['set_3_reps'] %> x <% work[i]['set_3_weight'] %>kg (<% work[i]['set_3_percentage']%>%)
+
+<%*  
+// end work for loop
+}
+-%>
+
+
